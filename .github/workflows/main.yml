@@ -1,50 +1,56 @@
-name: Supercharged Windows RDP
+name: Universal Fast RDP
 on: workflow_dispatch
 
 jobs:
-  rdp-session:
+  general-purpose:
     runs-on: windows-latest
+    timeout-minutes: 360
+
     steps:
-      - name: 🚀 Optimize System (Charging RAM)
+      - name: 🚀 System Speed-Up
         shell: powershell
         run: |
-          # Disable Visual Effects to speed up RDP
-          $mask = [byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "UserPreferencesMask" -Value $mask
+          # Performance Mode: Visual effects off karein taake RDP lag na kare
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
           
-          # Modern PageFile Setup (Replaces broken wmic)
+          # Virtual Memory (RAM) ko "Charge" karein
           $sys = Get-CimInstance Win32_ComputerSystem
           Set-CimInstance -InputObject $sys -Property @{AutomaticManagedPagefile = $False}
-          New-CimInstance -ClassName Win32_PageFileSetting -Property @{Name="C:\pagefile.sys"; InitialSize=8192; MaximumSize=16384} -ErrorAction SilentlyContinue
+          New-CimInstance -ClassName Win32_PageFileSetting -Property @{Name="C:\pagefile.sys"; InitialSize=4096; MaximumSize=8192} -ErrorAction SilentlyContinue
 
-      - name: 🛡️ Install Tailscale (Native Windows)
+      - name: 🛡️ Network Setup (Tailscale)
         shell: powershell
         run: |
+          # Tailscale install aur connect karna
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -OutFile "ts.msi"
           Start-Process msiexec.exe -ArgumentList "/i ts.msi /quiet /norestart" -Wait
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=Premiere-Workstation
-          Write-Host "Tailscale IP:"
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=General-Worker
+          Write-Host "Connected! IP Address is:"
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: 🔑 Configure Secure RDP & User
+      - name: 🛠️ Install Basic Apps (Fast Mode)
         shell: powershell
         run: |
-          # Enable Remote Desktop
+          # Choco ke zariye zaroori apps auto-install
+          choco install googlechrome vlc qbittorrent vscode -y
+
+      - name: 🔑 Secure User Creation
+        shell: powershell
+        run: |
+          # RDP Permission aur User settings
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # Create High-Performance User
-          $Pass = ConvertTo-SecureString "AdobeTester77!" -AsPlainText -Force
-          $User = New-LocalUser "PowerUser" -Password $Pass -Description "RDP Admin"
-          Add-LocalGroupMember -Group "Administrators" -Member "PowerUser"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "PowerUser"
+          $Pass = ConvertTo-SecureString "GeneralUser786!" -AsPlainText -Force
+          New-LocalUser "AdminUser" -Password $Pass -Description "General RDP Admin"
+          Add-LocalGroupMember -Group "Administrators" -Member "AdminUser"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "AdminUser"
 
-      - name: ⚡ Pre-load Adobe Installer
+      - name: 🌐 Live Session
         shell: powershell
         run: |
-          $Desktop = [Environment]::GetFolderPath("Desktop")
-          Invoke-WebRequest -Uri "https://ccmdls.adobe.com/AdobeProducts/KCCC/CCD/5_9_0/win64/Creative_Cloud_Set-Up.exe" -OutFile "$Desktop\Install_Adobe.exe"
-
-      - name: ⏳ Keep Alive (8 Hours)
-        shell: powershell
-        run: Start-Sleep -Seconds 21600
+          Write-Host "--- LOGIN INFO ---"
+          Write-Host "Username: AdminUser"
+          Write-Host "Password: GeneralUser786!"
+          Write-Host "Machine is live for 6 hours."
+          Start-Sleep -Seconds 21600

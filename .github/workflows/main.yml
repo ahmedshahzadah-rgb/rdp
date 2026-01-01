@@ -1,69 +1,50 @@
-name: Supercharged RDP for Premiere
-on: 
-  workflow_dispatch:
+name: Supercharged Windows RDP
+on: workflow_dispatch
 
 jobs:
-  remote-session:
+  rdp-session:
     runs-on: windows-latest
-    timeout-minutes: 360
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Optimize Windows RAM & Performance
+      - name: 🚀 Optimize System (Charging RAM)
         shell: powershell
         run: |
-          # 1. Disable Visual Effects
-          $visualSettings = "HKCU:\Control Panel\Desktop"
-          Set-ItemProperty -Path $visualSettings -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
+          # Disable Visual Effects to speed up RDP
+          $mask = [byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00)
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "UserPreferencesMask" -Value $mask
           
-          # 2. Modern PageFile Setup (Replaces deprecated wmic)
+          # Modern PageFile Setup (Replaces broken wmic)
           $sys = Get-CimInstance Win32_ComputerSystem
-          $sys | Set-CimInstance -Property @{AutomaticManagedPagefile = $False}
-          $pagefile = Get-CimInstance Win32_PageFileSetting
-          if ($pagefile) {
-              $pagefile | Set-CimInstance -Property @{InitialSize = 8192; MaximumSize = 16384}
-          } else {
-              New-CimInstance -ClassName Win32_PageFileSetting -Property @{Name="C:\pagefile.sys"; InitialSize=8192; MaximumSize=16384}
-          }
+          Set-CimInstance -InputObject $sys -Property @{AutomaticManagedPagefile = $False}
+          New-CimInstance -ClassName Win32_PageFileSetting -Property @{Name="C:\pagefile.sys"; InitialSize=8192; MaximumSize=16384} -ErrorAction SilentlyContinue
 
-      - name: Install Tailscale on Windows
+      - name: 🛡️ Install Tailscale (Native Windows)
         shell: powershell
         run: |
-          # Download and install Tailscale MSI
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -OutFile "tailscale.msi"
-          Start-Process msiexec.exe -ArgumentList "/i tailscale.msi /quiet /norestart" -Wait
-          
-          # Add Tailscale to Path and Start
-          $env:Path += ";C:\Program Files\Tailscale"
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=GH-Premiere-Worker
-          
-          Write-Host "Tailscale Connected!"
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.msi" -OutFile "ts.msi"
+          Start-Process msiexec.exe -ArgumentList "/i ts.msi /quiet /norestart" -Wait
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --hostname=Premiere-Workstation
+          Write-Host "Tailscale IP:"
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: Configure RDP & High-Power User
+      - name: 🔑 Configure Secure RDP & User
         shell: powershell
         run: |
-          # Enable RDP
+          # Enable Remote Desktop
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # Create Admin User
-          $Password = ConvertTo-SecureString "SuperSecure123!" -AsPlainText -Force
-          $User = New-LocalUser "runneradmin" -Password $Password -Description "RDP User"
-          Add-LocalGroupMember -Group "Administrators" -Member "runneradmin"
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
+          # Create High-Performance User
+          $Pass = ConvertTo-SecureString "AdobeTester77!" -AsPlainText -Force
+          $User = New-LocalUser "PowerUser" -Password $Pass -Description "RDP Admin"
+          Add-LocalGroupMember -Group "Administrators" -Member "PowerUser"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "PowerUser"
 
-      - name: Auto-Download Premiere Installer
+      - name: ⚡ Pre-load Adobe Installer
         shell: powershell
         run: |
-          # This places the Creative Cloud setup on the desktop for you
-          $DesktopPath = [Environment]::GetFolderPath("Desktop")
-          Invoke-WebRequest -Uri "https://ccmdls.adobe.com/AdobeProducts/KCCC/CCD/5_9_0/win64/Creative_Cloud_Set-Up.exe" -OutFile "$DesktopPath\Install_Premiere.exe"
+          $Desktop = [Environment]::GetFolderPath("Desktop")
+          Invoke-WebRequest -Uri "https://ccmdls.adobe.com/AdobeProducts/KCCC/CCD/5_9_0/win64/Creative_Cloud_Set-Up.exe" -OutFile "$Desktop\Install_Adobe.exe"
 
-      - name: Keep Alive
+      - name: ⏳ Keep Alive (8 Hours)
         shell: powershell
-        run: |
-          Write-Host "VROOOM! System is ready and charging."
-          Start-Sleep -Seconds 21600
+        run: Start-Sleep -Seconds 21600

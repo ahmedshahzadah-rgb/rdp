@@ -1,51 +1,71 @@
-name: High-Power RDP for Premiere
+name: Supercharged RDP for Premiere
 on: 
   workflow_dispatch:
 
 jobs:
   remote-session:
-    # 'windows-latest' has better hardware acceleration hooks than Linux
     runs-on: windows-latest
-    timeout-minutes: 360 # Max 6 hours
+    timeout-minutes: 360
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Optimize Windows for Performance
+      - name: Optimize Windows (Modern Methods)
         shell: powershell
         run: |
-          # Disable visual animations to save CPU/RAM for RDP
-          Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
-          # Increase PageFile size for heavy Adobe rendering
-          wmic computersystem where name="%computername%" set AutomaticManagedPagefile=False
-          wmic pagefileset where name="C:\\pagefile.sys" set InitialSize=8192,MaximumSize=16384
+          # 1. Disable Visual Effects for high-speed RDP
+          $visualSettings = "HKCU:\Control Panel\Desktop"
+          Set-ItemProperty -Path $visualSettings -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
+          
+          # 2. Advanced PageFile optimization (Modern PowerShell)
+          # This gives Premiere more "virtual RAM" to prevent crashes
+          $ComputerSystem = Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue
+          $ComputerSystem | Set-CimInstance -Property @{AutomaticManagedPagefile = $False}
+          $PageFile = Get-CimInstance Win32_PageFileSetting
+          if ($PageFile) {
+              $PageFile | Set-CimInstance -Property @{InitialSize = 8192; MaximumSize = 16384}
+          } else {
+              New-CimInstance -ClassName Win32_PageFileSetting -Property @{Name="C:\pagefile.sys"; InitialSize=8192; MaximumSize=16384}
+          }
+
+      - name: Install Rendering Prerequisites
+        shell: powershell
+        run: |
+          # Use Chocolatey to install useful tools fast
+          choco install googlechrome vlc -y
 
       - name: Connect Tailscale (Secure OAuth)
         uses: tailscale/github-action@v2
         with:
-          # Use OAuth Client ID and Secret for enterprise-grade security
           oauth-client-id: ${{ secrets.TS_OAUTH_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
-      - name: Setup RDP & User
+      - name: Configure RDP Access
         shell: powershell
         run: |
           # Enable Remote Desktop
-          set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           
-          # Set password for the 'runneradmin' user
+          # Create High-Performance User
           $Password = ConvertTo-SecureString "SuperSecure123!" -AsPlainText -Force
-          Set-LocalUser -Name "runneradmin" -Password $Password
+          if (!(Get-LocalUser -Name "runneradmin" -ErrorAction SilentlyContinue)) {
+            New-LocalUser "runneradmin" -Password $Password -Description "RDP User"
+          }
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
+          Add-LocalGroupMember -Group "Administrators" -Member "runneradmin"
           
-          echo "RDP Ready!"
+          Write-Host "--- CONNECTION DETAILS ---"
+          Write-Host "IP Address:"
           tailscale ip -4
+          Write-Host "User: runneradmin"
+          Write-Host "Pass: SuperSecure123!"
 
-      - name: Keep Alive for Rendering
+      - name: Stay Online
         shell: powershell
         run: |
-          Write-Host "Connecting now... Job will stay alive for 6 hours."
-          # Prevents the runner from closing
+          Write-Host "Machine is live and charging. Keep this tab open."
           Start-Sleep -Seconds 21600

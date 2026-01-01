@@ -1,0 +1,51 @@
+name: High-Power RDP for Premiere
+on: 
+  workflow_dispatch:
+
+jobs:
+  remote-session:
+    # 'windows-latest' has better hardware acceleration hooks than Linux
+    runs-on: windows-latest
+    timeout-minutes: 360 # Max 6 hours
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Optimize Windows for Performance
+        shell: powershell
+        run: |
+          # Disable visual animations to save CPU/RAM for RDP
+          Set-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
+          # Increase PageFile size for heavy Adobe rendering
+          wmic computersystem where name="%computername%" set AutomaticManagedPagefile=False
+          wmic pagefileset where name="C:\\pagefile.sys" set InitialSize=8192,MaximumSize=16384
+
+      - name: Connect Tailscale (Secure OAuth)
+        uses: tailscale/github-action@v2
+        with:
+          # Use OAuth Client ID and Secret for enterprise-grade security
+          oauth-client-id: ${{ secrets.TS_OAUTH_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Setup RDP & User
+        shell: powershell
+        run: |
+          # Enable Remote Desktop
+          set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          # Set password for the 'runneradmin' user
+          $Password = ConvertTo-SecureString "SuperSecure123!" -AsPlainText -Force
+          Set-LocalUser -Name "runneradmin" -Password $Password
+          
+          echo "RDP Ready!"
+          tailscale ip -4
+
+      - name: Keep Alive for Rendering
+        shell: powershell
+        run: |
+          Write-Host "Connecting now... Job will stay alive for 6 hours."
+          # Prevents the runner from closing
+          Start-Sleep -Seconds 21600
